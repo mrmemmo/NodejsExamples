@@ -1,33 +1,45 @@
 // server.js
 const express = require("express");
-const path = require("path");
+const http = require("http");
+const { Server } = require("socket.io");
 
 const app = express();
-const PORT = 3000;
+const server = http.createServer(app);
+const io = new Server(server);
 
-// Serve static files from the "public" folder
+// Serve static files from public/ directory
 app.use(express.static("public"));
 
+// We'll store all chat messages here in memory (simple example):
+// Each entry will be { name: "Alice", text: "Hello, everyone!" }
+let messages = [];
 
-// random number is generated and sent
-app.get("/api/data", (req, res) => {
-    const randomNumber = Math.floor(Math.random() * 100);
-    res.json({ message: `Your random number from EXPRESS is: ${randomNumber}` });
+// Listen for new socket connections
+io.on("connection", (socket) => {
+  console.log("A user connected:", socket.id);
+
+  // 1) Send existing chat history to the newly connected client
+  socket.emit("chatHistory", messages);
+
+  // 2) When client emits a new chat message:
+  //    payload should be { name, text }
+  socket.on("sendChat", (payload) => {
+    console.log("New chat message:", payload);
+    // Add the new message to our in-memory "messages" array
+    messages.push(payload);
+    
+    // Broadcast this new message to all connected clients
+    io.emit("chatMessage", payload);
   });
 
-  // generic greeting
-app.get("/api/greet", (req, res) => {
-    res.json({ message: "Hello from /api/greet!" });
+  // Optional: when user disconnects
+  socket.on("disconnect", () => {
+    console.log("User disconnected:", socket.id);
   });
-  
-
-  // dynamic greeting that uses variable sent from Vue/index.html
-app.get("/api/hello", (req, res) => {
-    const name = req.query.name || "Anonymous";
-    res.json({ message: `Hello, ${name}!` });
-  });
+});
 
 // Start the server
-app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+const PORT = 3000;
+server.listen(PORT, () => {
+  console.log(`Chat server running at http://localhost:${PORT}`);
 });

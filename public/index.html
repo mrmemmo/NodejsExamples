@@ -1,76 +1,86 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Vue + Express Demo</title>
-  <!-- Include Vue 3 from a CDN for simplicity -->
-  <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.js"></script>
+  <meta charset="UTF-8" />
+  <title>Basic Chat App</title>
 </head>
 <body>
   <div id="app">
-    <h1>{{ greeting }}</h1> <!-- displays the greeting variable defined below in the Vue script -->
-     <!-- Generic greeting grabbed when app starts -->
-     <p>{{  serverResponse }}</p>
+    <h1>Socket.IO + Vue Chat</h1>
+    
+    <!-- User Name -->
+    <p>
+      Your Name:
+      <input v-model="userName" placeholder="Enter your name" />
+    </p>
 
-    <!-- @click is used to connect to a view method - randoResponse holds data fetched from server.js  -->
-    <button @click="fetchServerData">Fetch Server Data</button>
-    <p>{{ randoResponse }}</p>
+    <!-- Chat Input -->
+    <p>
+      Message:
+      <input v-model="chatText" placeholder="Type a message" />
+      <button @click="sendChat">Send</button>
+    </p>
 
-     <!-- Input for the user's name -->
-     <p>Enter your name:</p>
-     <input v-model="userName" />
-     <!-- Button calls fetchPersonalized with the userName -->
-     <button @click="fetchPersonalized(userName)">Greet Me</button>
-     <!-- Personalize greet response -->
-     <p>{{  greetResponse }}</p>
+    <hr />
+
+    <!-- Chat Display -->
+    <ul>
+      <!-- Loop through all messages -->
+      <li v-for="(msg, index) in messages" :key="index">
+        <strong>{{ msg.name }}:</strong> {{ msg.text }}
+      </li>
+    </ul>
   </div>
+
+  <!-- Vue 3 from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.js"></script>
+  
+  <!-- Socket.IO client script (served by our server at /socket.io/socket.io.js) -->
+  <script src="/socket.io/socket.io.js"></script>
 
   <script>
     const { createApp } = Vue;
 
     createApp({
-  data() {
-    return {
-      serverResponse: "",
-      greetResponse: "",
-      randoResponse: "",
-      greeting: "Hello from Vue!"// a vue variable that we are using locally. not for retrieving data from server.js
-    };
-  },
-  created() {
-    // Auto-fetch data at component creation
-    this.fetchServerData();
-    this.fetchGreet()
-  },
-  methods: {
-    async fetchServerData() {
-      try {
-        const res = await fetch("/api/data");
-        const json = await res.json();
-        this.randoResponse = json.message;
-      } catch (err) {
-        console.error("Error fetching server data:", err);
-      }
-    },
-    async fetchGreet() {
-    const res = await fetch("/api/greet");
-    const json = await res.json();
-    this.serverResponse = json.message;
-  },
-  // In Vue:
-async fetchPersonalized(name) {
-  const res = await fetch(`/api/hello?name=${encodeURIComponent(name)}`);
-  const json = await res.json();
-  this.greetResponse = json.message;
-},
-    refreshData() {
-      // Maybe you do some special "reset" logic before fetching again
-      this.serverResponse = "";
-      this.fetchServerData();
-    }
-  }
-}).mount("#app");
+      data() {
+        return {
+          userName: "",
+          chatText: "",
+          messages: []
+        };
+      },
+      mounted() {
+        // 1) Connect to the Socket.IO server
+        this.socket = io();
 
+        // 2) Receive the entire chat history (only once, right after we connect)
+        this.socket.on("chatHistory", (serverMessages) => {
+          this.messages = serverMessages;
+        });
+
+        // 3) When a new message arrives from the server
+        this.socket.on("chatMessage", (newMessage) => {
+          this.messages.push(newMessage);
+        });
+      },
+      methods: {
+        sendChat() {
+          // Trim input and ensure we have a name + message
+          const name = this.userName.trim();
+          const text = this.chatText.trim();
+          if (!name || !text) {
+            return; // do nothing if missing data
+          }
+          
+          // Emit an event to the server with our name + message
+          const payload = { name, text };
+          this.socket.emit("sendChat", payload);
+
+          // Clear chat text
+          this.chatText = "";
+        }
+      }
+    }).mount("#app");
   </script>
 </body>
 </html>
